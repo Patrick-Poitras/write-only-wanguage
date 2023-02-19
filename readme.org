@@ -9,7 +9,7 @@ This means that there is a five order of magnitude increase in safety.
 
 * Official instructions
 
-Compile the program with `cargo build`, then open the executable.
+Compile the program with =cargo build=, then open the executable.
 
 The executable had no way of reading any wanted inputs, so it will
 sit in an endless loop. This is the only endorsed mode of operation for the
@@ -22,39 +22,35 @@ This will void the warranty.
 
 You will need rust and rust-gdb
 
-Compile the program with `cargo build`, then open the executable
+Compile the program with =cargo build=, then open the executable
 with rust-gdb.
 
-```
-rust-gdb target/debug/write-only
-```
+~> rust-gdb target/debug/write-only~
 
 Put a breakpoint at the start of the loop.
 
-```
-(gdb) b loop
-```
+~(gdb) b 19~
 
 Then run the program and advance to the breakpoint.
 
-```
+#+begin_src sh
 (gdb) r
 (gdb) c
-```
-Write your instruction into INS
+#+end_src
 
-```
-(gdb) set INS.v.value = 0xA001
-````
+Write your instruction into INS
+#+begin_src sh
+  (gdb) set INS.v.value = 0xA001
+#+end_src
 and then let the code execute the loop
-```
-(gdb) c
-```
+#+begin_src sh
+ (gdb) c 
+#+end_src
 
 The language does not allow you to read the output, but you can read the variables using gdb anyway.
-```
-(gdb) print ACC.v.value
-```
+
+=(gdb) print ACC.v.value=
+
 and then write them down in a book somewhere.
 
 * Complaints
@@ -67,7 +63,9 @@ constitute a violation of the standard.
 
 ** I encountered a bug while using the unofficial method
 
-Because the method is unofficial, we cannot provide support.
+Because the method is unofficial, we are going to strictly assign the blame on you for any
+software defects. Despite this, feel free to file an issue so that others may laugh at your
+ineptitude. 
 
 ** Atomic values use unsafe on the backend, yet you claimed to not use unsafe
 
@@ -83,7 +81,6 @@ Please file an issue, and we will take great pleasure in telling you that you ar
 |---------+-----------------------------------------------------------------------------|
 | 0x0000  | Idle, wait 10ms                                                             |
 |---------+-----------------------------------------------------------------------------|
-| 0xA...  | Accumulator Operations                                                      |
 |---------+-----------------------------------------------------------------------------|
 | 0xA000  | Zero Acc                                                                    |
 | 0xA001  | Increment ACC                                                               |
@@ -98,8 +95,7 @@ Please file an issue, and we will take great pleasure in telling you that you ar
 |---------+-----------------------------------------------------------------------------|
 | 0xBAXX  | Set INS to *XX                                                              |
 | 0xBBXX  | Set INS to *XX, Setup deferred jammer to set BB(XX+1)                       |
-| 0xBCXX  | Set INS to *XX, if (*XX & 0xFF0000) > 0, then setup deferred jammer to BXYY |
-|         | where YY is the value from the bitwise operation above.                     |
+| 0xBCXX  | Set INS to *XX, if (*XX & 0xFF0000) > 0, then setup deferred jammer to BXYY where YY is the value from the bitwise operation above.                     |
 |---------+-----------------------------------------------------------------------------|
 | 0xC0XX  | If ACC == 0 -> Set INS to *XX                                               |
 | 0xC1XX  | If ACC != 0 -> Set INS to *XX                                               |
