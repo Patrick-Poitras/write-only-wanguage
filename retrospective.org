@@ -120,7 +120,7 @@ Let's work through the control flow here.
 | Step | Place in code                     | heap[0x04] | ACC |    INS |
 |------+-----------------------------------+------------+-----+--------|
 |    0 | Start of loop                     |     0xA000 | any | 0xBA04 |
-|   11 | Dispatch -> set_ins()             |     0xA000 | any |      0 |
+|    1 | Dispatch -> set_ins()             |     0xA000 | any |      0 |
 |    2 | After set_ins()                   |     0xA000 | any | 0xA000 |
 |    3 | Start of loop                     |     0xA000 | any | 0xA000 |
 |    4 | Dispatch -> zero_acc()            |     0xA000 | any |      0 |
@@ -141,6 +141,20 @@ instruction into INS as soon as possible. This basically keeps the next instruct
 and could be replaced by a queue, but I think this mechanism is fun. Plus, it's definitely a write-only
 mechanism.
 
+#+begin_src rust
+fn deferred_jam_instruction(ins: u16) {
+    std::thread::spawn( move || {
+	let mut cycles = 10; // Lol deadlock prevention
+	while INS.load(Ordering::SeqCst) != 0 && cycles > 0 {
+	    cycles -= 1; 
+	    // Wait for INS = 0
+	    thread::sleep(time::Duration::from_millis(2));
+	}
+	INS.store(ins, Ordering::SeqCst);
+    });
+}
+#+end_src
+
 The op-code BBXX, loads the instruction at (XX+1) into memory, and then creates a jammer to
 load BB(XX + 2) into INS if INS == 0. Beautiful. If you are wondering whether this causes problems,
 or has race-condition issues, the answer is yes.
@@ -155,8 +169,41 @@ following values in memory:
 |    0x06 | 0xA001 | Incr ACC                                           |
 |    0x07 | 0xA001 | Incr ACC                                           |
 
-Working through this example confirms that should these have been the initial conditions,
-ACC would be equal to 2. But this doesn't solve the main problem: how is this scenario possible
+We can chain jammers to keep the code moving
+
+| Address |  Value | Instruction functionality                          |
+|---------+--------+----------------------------------------------------|
+|    0x04 | 0xA000 | Zero ACC                                           |
+|    0x05 | 0xBB06 | Set INS to value of 0x06 and start jammer for 0x07 |
+|    0x06 | 0xA001 | Incr ACC                                           |
+|    0x07 | 0xBB08 | Set INS to value of 0x06 and start jammer for 0x07 |
+|    0x08 | 0xA001 | Incr ACC                                           |
+|    0x09 | 0xAA04 | Store ACC to 0x04                                  |
+
+Let's see this in action.
+
+| Step | Place in code                     | heap[0x04] | ACC |                INS |
+|------+-----------------------------------+------------+-----+--------------------|
+|    0 | Start of loop                     |     0xA000 | any |             0xBB04 |
+|    1 | Dispatch -> set_ins_and_jam()     |     0xA000 | any |                  0 |
+|    2 | After set_ins_and_jam()           |     0xA000 | any |             0xA000 |
+|    3 | Dispatch -> zero_acc()            |     0xA000 | any |             0xBB06 |
+|    4 | After zero_acc()                  |     0xA000 |   0 |             0xBB06 |
+|    5 | Dispatch -> set_ins_and_jam()     |     0xA000 |   0 |                  0 |
+|    6 | After set_ins_and_jam             |     0xA000 |   0 |             0xA001 |
+|    7 | (Prior to dispatch)               |     0xA000 |   0 |                  0 |
+|    8 | Dispatch -> incr_acc()            |     0xA000 |   0 | 0xBB08 (jammed in) |
+|    9 | After incr_acc()                  |     0xA000 |   1 |             0xBB08 |
+|   10 | Dispatch -> set_ins_and_jam()     |     0xA000 |   1 |                  0 |
+|   11 | After set_ins_and_jam()           |     0xA000 |   1 |             0xA001 |
+|   12 | Dispatch -> incr_acc()            |     0xA000 |   1 |                  0 |
+|   13 | After incr_acc()                  |     0xA000 |   2 | 0xAA04 (jammed in) |
+|   14 | Dispatch -> write_acc()           |     0xA000 |   2 |                  0 |
+|   15 | After write_acc()                 |          2 |   2 |                  0 |
+|      | (At this point, it loops forever) |          2 |   2 |                  0 |
+
+Fantastic! The jammer is a very nice and not at all problematic way to do what could be done
+by a simple data structure. But this still doesn't solve the main problem: how is this scenario possible
 if all the memory values, including ACC and INS, are set to 0?
 
 * Interacting with the uninteractive machine
