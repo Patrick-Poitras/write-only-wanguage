@@ -3,7 +3,7 @@ use std::time;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 
 fn main() {
-    eval_print_loop();
+    eval_loop();
 }
 
 //// Op codes:
@@ -17,7 +17,8 @@ enum Continuation {
     Stop,
     Continue
 }
-fn eval_print_loop() {
+
+fn eval_loop() {
     let mut heap: [u64; 256] = [0; 256];
     loop {
 	let ins = INS.load(Ordering::SeqCst);
@@ -41,7 +42,7 @@ fn eval_print_loop() {
 	    0xA800..=0xA8FF => bw_ior_acc(&heap, ins),
 	    0xAA00..=0xAAFF => write_acc(&mut heap, ins),
 	    0xAB00 => write_acc_all(&mut heap),
-	    0xBA00..=0xBAFF => set_ins(& heap, ins),
+	    0xBA00..=0xBAFF => set_ins(&heap, ins),
 	    0xBB00..=0xBBFF => set_ins_and_jam(&heap, ins),
 	    0xBC00..=0xBCFF => set_ins_and_jam_conditional(&heap, ins),
 	    0xC000..=0xC0FF => jmp_if_eq(&heap, ins, true),
@@ -178,14 +179,11 @@ fn set_ins(heap: &[u64; 256], ins: u16) -> Continuation {
 
 fn deferred_jam_instruction(ins: u16) {
     std::thread::spawn( move || {
-	let mut cycles = 10;
-	while INS.load(Ordering::SeqCst) != 0 {
-	    // Wait for reset
-	    cycles -= 1; // Lol deadlock
+	let mut cycles = 10; // Lol deadlock prevention
+	while INS.load(Ordering::SeqCst) != 0 && cycles > 0 {
+	    cycles -= 1; 
+	    // Wait for INS = 0
 	    thread::sleep(time::Duration::from_millis(3));
-	    if cycles == 0 {
-		break;
-	    }
 	}
 	INS.store(ins, Ordering::SeqCst);
     });
